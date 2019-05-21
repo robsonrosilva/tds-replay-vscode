@@ -1,6 +1,8 @@
 # tds-replay-vscode
 
-A extensão do **TDS Replsy VSCode** disponibiliza ferramentas de apoio na investigação de ocorrências em ambientes Portheus, sem a necessidade de replicar ambientes do cliente (base de dados, RPO, parâmetrização, aplicação de customizações e outros).
+> NÃO USAR. Versão incompleta e instável.
+
+A extensão do **TDS Replsy VSCode** disponibiliza interfaces a ferramentas de apoio na investigação de ocorrências em ambientes Portheus, sem a necessidade de replicar ambientes do cliente (base de dados, RPO, parâmetrização, aplicação de customizações e outros).
 
 ## Gravador
 
