@@ -1,0 +1,9 @@
+{
+	"tds.replay.package.description": "TDS Replay for VSCode",
+	"tds.replay.package.show.welcome.first.initialize": "TDS Replay in First Initialize",
+	"tds.replay.package.load": "Load TDS Replay file",
+	"tds.replay.package.record": "Record a new session",
+	"tds.replay.package.play": "Play a session",
+	"tds.replay.package.showView": "Show Session Explorer",
+	"tds.replay.package.titleView": "Session Explorer"
+}
