@@ -17,7 +17,7 @@ const es = require('event-stream');
 const minimist = require('minimist');
 
 const translationProjectName = 'vscode-extensions';
-const translationExtensionName = 'totvs-developer-studio';
+const translationExtensionName = 'tds-replay-vscode';
 
 const defaultLanguages = [
     { id: 'es', folderName: 'esn' },
