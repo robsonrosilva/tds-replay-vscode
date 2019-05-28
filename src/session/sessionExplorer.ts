@@ -10,7 +10,9 @@ const localize = nls.loadMessageBundle();
 const sessionProvider = new SessionsProvider();
 
 const messages = {
-	'att.required': 'Atributo [{0}] requerido.'
+	'att.required': 'Atributo [{0}] requerido.',
+	'already_exist': 'Item [{0}] já existe.',
+	'not_exist': 'Item [{0}] não existe.'
 };
 
 const ATT_REQUIRED = 'att.required';
@@ -18,7 +20,7 @@ const MSG_READY = 'ready';
 const MSG_SELECT_SMART_CLIENT = 'selectSmartClient';
 const MSG_SELECT_PARAMETERS_FILE = 'selectParametersFile';
 const MSG_EDIT_INCLUDES = 'editIncludes';
-const MSG_UPCATE_MODEL = 'updateModel';
+const MSG_UPDATE_MODEL = 'updateModel';
 const MSG_START = 'start';
 const MSG_SHOW_EDIT_LIST = 'showEditList';
 const MSG_UPDATE_DIALOG = 'updateDialog';
@@ -42,19 +44,19 @@ let replayParameters: ReplayParameters = {
 	contactEmail: "",
 	contactPhone: "",
 	smartClientFilename: "",
-	parameters: [""],
+	parameters: [],
 	startProgram: "",
-	programParameters: [""],
+	programParameters: [],
 	driver: "",
 	environment: "",
 	parametersFilename: "",
 	alias: "",
 	description: "",
 	recordFilename: "",
-	includes: [""],
-	excludes: [""],
-	tables: [""],
-	functions: [""],
+	includes: [],
+	excludes: [],
+	tables: [],
+	functions: [],
 	arrayLevel: 0,
 	startImmediately: false,
 	recordAllLevels: false,
@@ -134,31 +136,44 @@ function recordSession(context) {
 
 		switch (message.command) {
 			case MSG_READY:
-				panelAdd.webview.postMessage({ command: MSG_UPDATE_DIALOG, data: replayParameters });
+				if (message.sender === 'replayParameters') {
+					panelAdd.webview.postMessage({ command: MSG_UPDATE_DIALOG, sender: 'replayParameters', data: replayParameters });
+				} else if (message.sender === 'editListDialog') {
+					panelAdd.webview.postMessage({ command: MSG_UPDATE_DIALOG, sender: 'editListDialog', data: replayParameters.includes });
+				}
 				break;
-
 			case MSG_SELECT_SMART_CLIENT:
 				selectSmartClient(panelAdd);
 				break;
 			case MSG_SELECT_PARAMETERS_FILE:
 				selectParamatersFile(panelAdd);
 				break;
-			case MSG_UPCATE_MODEL:
-				replayParameters = fromJson(message.data);
-				errors = validateModel(replayParameters);
-				errors.slice(0, 1).forEach(element => {
-					vscode.window.showErrorMessage(localize(element[1], messages[element[1]], localize(element[0], element[0])));
-				});
-				panelAdd.webview.postMessage({ command: MSG_UPDATE_DIALOG, data: replayParameters, errors: errors });
+			case MSG_UPDATE_MODEL:
+				if (message.sender === 'replayParameters') {
+					replayParameters = fromJson(message.data);
+					errors = validateModel(replayParameters);
+					errors.slice(0, 1).forEach(element => {
+						vscode.window.showErrorMessage(localize(element[1], messages[element[1]], localize(element[0], element[0])));
+					});
+					panelAdd.webview.postMessage({ command: MSG_UPDATE_DIALOG, sender: 'replayParameters', data: replayParameters, errors: errors });
+				} else if (message.sender === 'editListDialog') {
+					//replayParameters.includes = message.data['?????'];
+					vscode.window.showErrorMessage("falta updateModel editListDialog");
+				}
 				break;
 
 			case MSG_EDIT_INCLUDES:
 				editIncludes(panelAdd);
 				break;
 			case MSG_EDIT_LIST_ADD_ITEM:
-
+				if (editIncludesAddItem(message.data)) {
+					panelAdd.webview.postMessage({ command: MSG_UPDATE_DIALOG, sender: 'editIncludes', data: replayParameters.includes });
+				}
 				break;
 			case MSG_EDIT_LIST_REMOVE_ITEM:
+				if (editIncludesRemoveItem(message.data)) {
+					panelAdd.webview.postMessage({ command: MSG_UPDATE_DIALOG, sender: 'editIncludes', data: replayParameters.includes });
+				}
 				break;
 			case MSG_START:
 				replayParameters = fromJson(message.data);
@@ -210,9 +225,9 @@ function fromJson(data: any): ReplayParameters {
 		alias: data['alias'],
 		description: data['description'],
 		recordFilename: data['recordFilename'],
-		includes: data['includes'],
-		excludes: data['excludes'],
-		tables: data['tables'],
+		includes: data['includes'].split(';'),
+		excludes: data['excludes'].split(';'),
+		tables: data['tables'].split(';'),
 		functions: data['functions'],
 		arrayLevel: data['arrayLevel'],
 		startImmediately: data['startImmediately'],
@@ -263,8 +278,8 @@ function getWebViewContent(context) {
 	// Local path to scripts run and css used in the webview
 	const jqueryPath = vscode.Uri.file(path.join(context.extensionPath, 'resources', 'webview', "jquery", "jquery-3.4.1.min.js"));
 
-	const bootstrapPath = vscode.Uri.file(path.join(context.extensionPath, 'resources', 'webview', "bootstrap", "js",  "bootstrap.min.js"));
-	const bootstrapCssPath = vscode.Uri.file(path.join(context.extensionPath, 'resources', 'webview', "bootstrap", "css",  "bootstrap.min.css"));
+	const bootstrapPath = vscode.Uri.file(path.join(context.extensionPath, 'resources', 'webview', "bootstrap", "js", "bootstrap.min.js"));
+	const bootstrapCssPath = vscode.Uri.file(path.join(context.extensionPath, 'resources', 'webview', "bootstrap", "css", "bootstrap.min.css"));
 
 	// And the uri we use to load this script in the webview
 	const jquery = jqueryPath.with({ scheme: 'vscode-resource' });
@@ -276,7 +291,7 @@ function getWebViewContent(context) {
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<xmeta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https:; script-src 'nonce-${nonce}';">
+		<xmeta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-resource: https:; script-src 'nonce-${nonce}';  style-src 'nonce-${nonce}';">
 		<title>${localize("tdsreplay.webview.recorder.session.title", "Gravação de Nova Sessão")}</title>
 		<link rel="stylesheet" href="${bootstrapCss}">
 	</head>
@@ -285,7 +300,7 @@ function getWebViewContent(context) {
 		<span class="formTitle">${localize("tdsreplay.webview.recorder.session.title", "Gravação de Nova Sessão")}</span>
 	</div>
 
-	<div class="card">
+	<div id="replayParameters" class="card">
 		<div class="card-title">
 			Qualificação
 		</div>
@@ -341,24 +356,23 @@ function getWebViewContent(context) {
 
 		window.addEventListener('message', event => {
 			const message = event.data; 
+			logJson("html ->>>>>", message);
 
 			switch (message.command) {
 			case '${MSG_UPDATE_DIALOG}':
 				if (message.data) {
-					updateDialog(message.data);
+					updateDialog(message.sender, message.data);
 				}
 
 				if (message.errors) {
-					updateError(message.errors);
+					updateError(message.sender, message.errors);
 				} else {
-					updateError({});
+					updateError(message.sender, {});
 				}
 
 				break;
 			case '${MSG_SHOW_EDIT_LIST}':
-				logJson("MSG_SHOW_EDIT_LIST", message);
-
-				prepareEditListDialog(message.data['title'], message.data['values'])
+				$("#editListDialog .modal-title").text(message.data['title']);
 				$("#editListDialog").modal('show');
 				break;
 			}
@@ -389,34 +403,45 @@ function getWebViewContent(context) {
 		}
 
 		function updateDialog(data) {
-			$('#txtSocialName'         ).val(data['socialName'         ]);
-			$('#txtId'                 ).val(data['id'                 ]);
-			$('#txtContactName'        ).val(data['contactName'        ]);
-			$('#txtContactEmail'       ).val(data['contactEmail'       ]);
-			$('#txtcontactPhone'       ).val(data['contactPhone'       ]);
-			$('#txtSmartClientFilename').val(data['smartClientFilename']);
-			//$('#txtParameters'         ).val(data['parameters'         ].join(';'));
-			$('#txtStartProgram'       ).val(data['startProgram'       ]); 
-			//$('#txtProgramParameters'  ).val(data['programParameters'  ].join(';'));
-			$('#txtDriver'             ).val(data['driver'             ]); 
-			$('#txtEnvironment'        ).val(data['environment'        ]);
-			$('#txtParametersFilename' ).val(data['parametersFilename' ]); 
-			$('#txtAlias'              ).val(data['alias'              ]); 
-			$('#txtDescription'        ).val(data['description'        ]);
-			$('#txtRecordFilename'     ).val(data['recordFilename'     ]); 
-			//$('#txtIncludes'           ).val(data['includes'           ].join(';'));
-			//$('#txtExcludes'           ).val(data['excludes'           ].join(';'));
-			//$('#txtTables'             ).val(data['tables'             ].join(';'));
-			//$('#txtFunctions'          ).val(data['functions'          ].join(';'));
-			$('#txtArrayLevel'         ).val(data['arrayLevel'         ]);
+			targetId = data['_targetId']?data['_targetId']:''
 
-			$('#txtStartImmediately'   ).attr("checked", data['startImmediately'   ]);
-			$('#txtRecordAllLevels'    ).attr("checked", data['recordAllLevels'    ]);
+			if (targetId == '') {
+				$('#txtSocialName'         ).val(data['socialName'         ]);
+				$('#txtId'                 ).val(data['id'                 ]);
+				$('#txtContactName'        ).val(data['contactName'        ]);
+				$('#txtContactEmail'       ).val(data['contactEmail'       ]);
+				$('#txtcontactPhone'       ).val(data['contactPhone'       ]);
+				$('#txtSmartClientFilename').val(data['smartClientFilename']);
+				//$('#txtParameters'         ).val(data['parameters'         ].join(';'));
+				$('#txtStartProgram'       ).val(data['startProgram'       ]); 
+				//$('#txtProgramParameters'  ).val(data['programParameters'  ].join(';'));
+				$('#txtDriver'             ).val(data['driver'             ]); 
+				$('#txtEnvironment'        ).val(data['environment'        ]);
+				$('#txtParametersFilename' ).val(data['parametersFilename' ]); 
+				$('#txtAlias'              ).val(data['alias'              ]); 
+				$('#txtDescription'        ).val(data['description'        ]);
+				$('#txtRecordFilename'     ).val(data['recordFilename'     ]); 
+				$('#txtIncludes'           ).val(data['includes'           ].join(';'));
+				$('#txtExcludes'           ).val(data['excludes'           ].join(';'));
+				$('#txtTables'             ).val(data['tables'             ].join(';'));
+				$('#txtFunctions'          ).val(data['functions'          ].join(';'));
+				$('#txtArrayLevel'         ).val(data['arrayLevel'         ]);
 
-			$('#txtDisableDuplicateLineVerification').attr("checked", data['disableDuplicateLineVerification'    ]);
-	}
+				$('#txtStartImmediately'   ).attr("checked", data['startImmediately'   ]);
+				$('#txtRecordAllLevels'    ).attr("checked", data['recordAllLevels'    ]);
 
-		function updateModel() {
+				$('#txtDisableDuplicateLineVerification').attr("checked", data['disableDuplicateLineVerification'    ]);
+			} else if (targetId == 'editListDialog') {
+				if (data['values']) {
+					$("#editListDialog #lstPatterns option").remove();
+					$.each(values, function(key, value) {   
+						$("#editListDialog #lstPatterns").append($("<option></option>").attr("value", key).text(value)); 
+					});
+				}
+			}
+		}	
+
+		function updateModel(sender) {
 			var data = {
 				'socialName'         : $('#txtSocialName'         ).val(),
 				'id'                 : $('#txtId'                 ).val(),
@@ -444,42 +469,61 @@ function getWebViewContent(context) {
 			}
 
 			vscode.postMessage({
-				command: '${MSG_UPCATE_MODEL}',
+				command: '${MSG_UPDATE_MODEL}',
+				sender: sender,
 				data: data
 			});
 		};
 
 		$.when($.ready).then(function() {
-			$("input").bind("change", function(e) {
-				updateModel();
+			$("#replayParameters > input").bind("change", function(e) {
+				updateModel('replayParameters');
 			});
 
 			$(":button").click(function(e) {
-				action = $(e.target).data("callback")
-				vscode.postMessage({
-					command: action
-				});
-			});
-
-			$("button[name='btnPattern'").click(function(e) {
+				sender = $(e.target).attr("id")
 				action = $(e.target).data("callback")
 
 				vscode.postMessage({
 					command: action,
-					data: { 'pattern' : $("#txtPattern").val(), 'currentPattern': $("#lstPatterns option:selected").text() }
+					sender: sender
+				});
+			});
+
+			$("button[name='btnPattern'").click(function(e) {
+				sender = $(e.target).attr("id")
+				action = $(e.target).data("callback")
+				pattern = $("#txtPattern").val()
+				currentPattern = $("#lstPatterns option:selected").text();
+
+				vscode.postMessage({
+					command: action,
+					sender: sender,
+					data: { 'pattern': pattern?pattern:'', 'currentPattern': currentPattern?currentPattern:'' }
 				});
 			});
 
 			$('#btn-ok').click(function(e) {
 				start();
 			});
-			
+
+			$('#txtIncludes' ).prop("disabled", true);
+			$('#txtExcludes' ).prop("disabled", true);
+			$('#txtTables'   ).prop("disabled", true);
+			$('#txtFunctions').prop("disabled", true);
+
 			$('#editListDialog').on('shown.bs.modal', function () {
+				vscode.postMessage({
+					command: '${MSG_READY}',
+					sender: 'editListDialog'
+				});
+
 				$('#editListDialog').trigger('focus')
 			  })
 
 			vscode.postMessage({
-				command: '${MSG_READY}'
+				command: '${MSG_READY}',
+				sender: 'replayParameters'
 			});
 		})
 
@@ -579,19 +623,7 @@ function editListDialog() {
 				</div>
 			</div>
 		</div>
-	</div>
-	<script>
-	function prepareEditListDialog(title, values) {
-		$("#editListDialog .modal-title").text(title);
-		$.each(values, function(key, value) {   
-			$("#editListDialog #lstPatterns")
-				.append($("<option></option>")
-						   .attr("value", key)
-						   .text(value)); 
-	   });
-	}
-
-	</script>`;
+	</div>`;
 }
 
 function selectSmartClient(webviewPanel: vscode.WebviewPanel) {
@@ -605,7 +637,7 @@ function selectSmartClient(webviewPanel: vscode.WebviewPanel) {
 	vscode.window.showOpenDialog(options).then((value: vscode.Uri[]) => {
 		if (value) {
 			replayParameters.smartClientFilename = value.toString();
-			webviewPanel.webview.postMessage({ command: MSG_UPDATE_DIALOG, data: replayParameters });
+			webviewPanel.webview.postMessage({ command: MSG_UPDATE_DIALOG, sender: "replayParameters", data: replayParameters });
 		}
 	});
 
@@ -622,17 +654,51 @@ function selectParamatersFile(webviewPanel: vscode.WebviewPanel) {
 	vscode.window.showOpenDialog(options).then((value: vscode.Uri[]) => {
 		if (value) {
 			replayParameters.parametersFilename = value.toString();
-			webviewPanel.webview.postMessage({ command: MSG_UPDATE_DIALOG, data: replayParameters });
+			webviewPanel.webview.postMessage({ command: MSG_UPDATE_DIALOG, sender: "replayParameters", data: replayParameters });
 		}
 	});
 
 }
 
 function editIncludes(webviewPanel: vscode.WebviewPanel) {
-	replayParameters.includes = ["op1", "op2", "op3"];
-
-	const values = { title: 'Lista de inclusão', values: replayParameters.includes };
+	const values = { title: 'Lista de inclusão' };
 	webviewPanel.webview.postMessage({ command: MSG_SHOW_EDIT_LIST, data: values });
+}
+
+function editIncludesAddItem(data: any): boolean {
+	const pattern = data["pattern"];
+	let result = true;
+	const index = replayParameters.includes.indexOf(pattern);
+
+	if (index === -1) {
+		replayParameters.includes.push(pattern);
+		replayParameters.includes = replayParameters.includes.sort(function (v1, v2: string) {
+			return v1.localeCompare(v2);
+		});
+	} else {
+		vscode.window.showErrorMessage(localize('already_exist', messages['already_exist'], pattern));
+		result = false;
+	}
+
+	return result;
+}
+
+function editIncludesRemoveItem(data: any): boolean {
+	const pattern = data["currentPattern"];
+	let result = true;
+	const index = replayParameters.includes.indexOf(pattern);
+
+	if (index !== -1) {
+		replayParameters.includes.splice(index);
+		replayParameters.includes = replayParameters.includes.sort(function (v1, v2: string) {
+			return v1.localeCompare(v2);
+		});
+	} else {
+		vscode.window.showErrorMessage(localize('not_exist', messages['not_exist'], pattern));
+		result = false;
+	}
+
+	return result;
 }
 
 function qualificationParameters() {
